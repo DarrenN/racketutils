@@ -7,11 +7,10 @@
 
 (provide (contract-out
           [hash-refs (->* ((listof any/c) hash?) (any/c) any)]
-          [get-in (-> (listof any/c)
-                      (->* () () #:rest (or/c
-                                         (list/c hash?)
-                                         (list/c hash? any/c))
-                           any))]
+          [get-in (->* ((listof any/c)) (hash? any/c)
+                       (or/c
+                        (->* (hash?) (any/c) any)
+                        any/c))]
           [get (-> any/c
                    (->* () () #:rest (or/c
                                       (list/c hash?)
@@ -38,14 +37,21 @@
 ;; get-in
 ;; ======
 ;;
-;; Partially apply a list of keys to hash-refs
+;; Extract a path of (nested) keys from a hash
+;; If you omit the hash returns a lambda bound to keys
+;; Has an optional "default" return value if key doesn't exist
 ;;
 ;; example:
+;;    (get-in '(a b) (hasheq 'a (hasheq 'b 12))) -> 12
+;;    (get-in '(c) (hasheq 'a 12)) -> #f
+;;    (get-in '(c) (hasheq 'a 12) "boo") -> "boo"
 ;;    (define get-b (get-in '(a b)))
 ;;    (get-b (hash 'a (hash 'b (hash 'c 2)))) -> (hash 'c 2)
 
-(define ((get-in ks) . args)
-  (apply hash-refs (append (list ks) args)))
+(define (get-in ks . h)
+  (if (null? h)
+      (curry get-in ks)
+      (apply hash-refs (append (list ks) h))))
 
 ;; get
 ;; ===
@@ -135,6 +141,10 @@
   
   (define j (hash 'a (hash 'b (hash 'c 2))))
   (define k (hash 'a (hash 'd (hash 'c 2))))
+
+  (check-equal? (get-in '(a b c) j) 2)
+  (check-equal? (get-in '(a b) j) (hash 'c 2))
+  (check-equal? (get-in '(z) j "boo") "boo")
   
   (define get-a (get-in '(a)))
   (define get-b (get-in '(a b)))
